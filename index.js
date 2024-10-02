@@ -1,8 +1,12 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
+const dotenv = require("dotenv");
 const users = require("./database/users");
+const authMiddlewares = require("./middlewares");
 const app = express();
 const port = 3000;
+
+dotenv.config();
 
 app.use(express.json());
 
@@ -14,31 +18,22 @@ app.post("/login", (req, res) => {
   const { username, password } = req.body;
   const user = users.find((userDB) => userDB.username === username);
   if (user && user.password === password) {
-    const token = jwt.sign({ id: user.id, role: user.role }, "elsecreto");
+    const token = jwt.sign(
+      { id: user.id, role: user.role },
+      process.env.SECRET
+    );
     return res.status(201).send({ token });
   }
   return res.status(401).send("Username or password is not correct");
 });
 
-app.get("/user", (req, res) => {
-  if (!req.headers.authorization) {
-    return res.status(401).send("You are not authorized");
-  }
-  try {
-    const token = req.headers.authorization.split(" ")[1];
-    const decoded = jwt.verify(token, "elsecreto");
-    if (decoded.role !== "admin") {
-      res.status(401).send("Your are not authorized");
-    }
-    const user = users.find((userDB) => userDB.id === decoded.id);
-    res.status(200).send(user);
-  } catch (err) {
-    res.status(401).send("You are not authorized");
-  }
+app.get("/user", authMiddlewares.validateToken, (req, res) => {
+  const user = users.find((userDB) => userDB.id === req.user.id);
+  res.status(200).send(user);
+});
 
-  /*const decoded = jwt.verify(token, "elsecreto");
-    const user = users.find((userDB) => userDB.id === decoded.id);
-    res.send(user);*/
+app.get("/secret", (req, res) => {
+  res.send(require("crypto").randomBytes(32).toString("hex"));
 });
 
 app.listen(port, () => {
